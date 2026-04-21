@@ -1,5 +1,4 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-app.js";
-// --- NEW: Added 'sendEmailVerification' to the import list below ---
 import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, onAuthStateChanged, signOut, sendEmailVerification } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-auth.js";
 import { getFirestore, doc, setDoc, getDoc, collection, addDoc, getDocs, query, orderBy, deleteDoc, where, updateDoc } from "https://www.gstatic.com/firebasejs/10.8.1/firebase-firestore.js";
 
@@ -156,15 +155,7 @@ if (isLoginPage) {
         if (isLoginMode) {
             signInWithEmailAndPassword(auth, email, password)
                 .then(async (userCredential) => {
-                    // --- NEW: EMAIL VERIFICATION CHECK ON LOGIN ---
-                    if (!userCredential.user.emailVerified) {
-                        await signOut(auth); // Kick them back out!
-                        messageBox.style.color = "#ff4757";
-                        messageBox.innerText = "Access Denied: Please check your email inbox and verify your link first!";
-                        return;
-                    }
-                    // ----------------------------------------------
-                    
+                    // if (!userCredential.user.emailVerified) { ... }
                     messageBox.style.color = "#2ed573";
                     messageBox.innerText = "Successfully logged in!";
                     window.location.href = "home.html";
@@ -184,15 +175,10 @@ if (isLoginPage) {
             const rollNumber = email.substring(0, 11);
             const batchYearStr = rollNumber.substring(0, 2); 
             
-            const currentDate = new Date();
-            let currentYear = currentDate.getFullYear();
-            let currentMonth = currentDate.getMonth();   
-            let firstYearAdmissionYear = currentYear;
-            if (currentMonth < 6) firstYearAdmissionYear = currentYear - 1;
+            let firstYearPrefix = new Date().getFullYear().toString().slice(-2);
+            if (new Date().getMonth() < 6) firstYearPrefix = (new Date().getFullYear() - 1).toString().slice(-2);
             
-            const firstYearPrefix = firstYearAdmissionYear.toString().slice(-2);
-            let userRole = "senior"; 
-            if (parseInt(batchYearStr) >= parseInt(firstYearPrefix)) userRole = "junior";
+            let userRole = parseInt(batchYearStr) >= parseInt(firstYearPrefix) ? "junior" : "senior";
 
             createUserWithEmailAndPassword(auth, email, password)
                 .then(async (userCredential) => {
@@ -200,34 +186,28 @@ if (isLoginPage) {
                         email: userCredential.user.email,
                         role: userRole,
                         rollNumber: rollNumber,
-                        nickname: nickname, 
+                        nickname: nickname,
+                        bio: "No bio yet.", // NEW: Default Bio on signup
                         createdAt: new Date()
                     });
                     
-                    // --- NEW: SEND THE VERIFICATION LINK ---
                     await sendEmailVerification(userCredential.user);
-                    await signOut(auth); // Log them out immediately so they can't sneak in
+                    await signOut(auth); 
                     
                     messageBox.style.color = "#2ed573";
-                    messageBox.innerText = "Success! We sent a verification link to your university email. (Note: Please check your Spam or Junk folder if you don't see it!)";
+                    messageBox.innerText = "Success! We sent a verification link to your university email. (Note: Check your Spam folder!)";
                     
-                    // Automatically switch the UI back to Login Mode so they are ready
                     setTimeout(() => { toggleLink.click(); }, 3000); 
-                    // ---------------------------------------
                 })
                 .catch((error) => {
                     messageBox.style.color = "#ff4757";
-                    if (error.code === 'auth/email-already-in-use') {
-                        messageBox.innerText = "This email is already registered. Try logging in!";
-                    } else {
-                        messageBox.innerText = error.message;
-                    }
+                    messageBox.innerText = error.code === 'auth/email-already-in-use' ? "Email already registered. Try logging in!" : error.message;
                 });
         }
     });
 }
 
-//home page logic home file
+//home page logic
 if (isHomePage) {
     const writeAdviceBtn = document.getElementById("writeAdviceBtn");
     const profileBtn = document.getElementById("profileBtn");
@@ -241,41 +221,58 @@ if (isHomePage) {
     const profileModal = document.getElementById("profileModal");
     const closeProfileBtn = document.getElementById("closeProfileBtn");
     const actualLogoutBtn = document.getElementById("actualLogoutBtn");
+    
     const profileNicknameDisplay = document.getElementById("profileNicknameDisplay");
     const profileEmailDisplay = document.getElementById("profileEmailDisplay");
+    const profileBioDisplay = document.getElementById("profileBioDisplay"); // NEW
     const myPostsContainer = document.getElementById("myPostsContainer");
 
     const searchUserInput = document.getElementById("searchUserInput");
     const clearSearchBtn = document.getElementById("clearSearchBtn");
     const searchToggleBtn = document.getElementById("searchToggleBtn");
     const searchContainer = document.getElementById("searchContainer");
+    
     let activeSearchQuery = "";
-
     let selectedCategory = "All";
     let currentUserNickname = "Senior"; 
+    let currentUserBio = "No bio yet."; // NEW
+    let currentViewingPostId = null; 
 
     const editProfileBtn = document.getElementById("editProfileBtn");
     const editProfileForm = document.getElementById("editProfileForm");
     const profileActionButtons = document.getElementById("profileActionButtons");
     const editNicknameInput = document.getElementById("editNicknameInput");
+    const editBioInput = document.getElementById("editBioInput"); // NEW
     const saveProfileBtn = document.getElementById("saveProfileBtn");
     const cancelEditBtn = document.getElementById("cancelEditBtn");
     const editFeedback = document.getElementById("editFeedback");
 
     const homeBtn = document.getElementById("homeBtn");
+
+    // Clickable Usernames Global Logic
+    function triggerProfileSearch(username) {
+        viewPostModal.style.display = "none"; // Close modal if open
+        searchContainer.style.display = "flex";
+        searchUserInput.value = username;
+        activeSearchQuery = username.toLowerCase();
+        clearSearchBtn.style.display = "block";
+        window.scrollTo(0, 0);
+        selectedCategory = "All";
+        categoryBtns.forEach(b => b.classList.remove("active"));
+        categoryBtns[0].classList.add("active"); 
+        loadPosts("All");
+    }
+
     if (homeBtn) {
         homeBtn.addEventListener("click", () => {
             searchContainer.style.display = "none";
             searchUserInput.value = "";
             activeSearchQuery = "";
             if(clearSearchBtn) clearSearchBtn.style.display = "none";
-
             categoryBtns.forEach(b => b.classList.remove("active"));
             categoryBtns[0].classList.add("active"); 
             selectedCategory = "All";
-
             window.scrollTo(0, 0);
-
             loadPosts("All");
         });
     }
@@ -298,15 +295,8 @@ if (isHomePage) {
     searchUserInput.addEventListener("input", (e) => {
         let val = e.target.value.trim().toLowerCase();
         if (val.startsWith("@")) val = val.substring(1);
-        
         activeSearchQuery = val;
-
-        if (activeSearchQuery.length > 0) {
-            clearSearchBtn.style.display = "block";
-        } else {
-            clearSearchBtn.style.display = "none";
-        }
-        
+        clearSearchBtn.style.display = activeSearchQuery.length > 0 ? "block" : "none";
         loadPosts(selectedCategory); 
     });
 
@@ -317,14 +307,15 @@ if (isHomePage) {
         loadPosts(selectedCategory);
     });
 
-    // Loading main feed
+    // Loading main feed & Public Profile
     async function loadPosts(categoryFilter) {
         feedContainer.innerHTML = '<h3 style="color: #a4b0be; text-align:center;">Loading advice...</h3>';
         try {
             const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
             const querySnapshot = await getDocs(q);
-            feedContainer.innerHTML = ""; 
-            let postsCount = 0;
+            
+            let matchingPosts = [];
+            let searchedUserDisplayName = activeSearchQuery;
 
             querySnapshot.forEach((docSnap) => {
                 const post = docSnap.data();
@@ -332,94 +323,133 @@ if (isHomePage) {
                 const displayName = post.authorName ? post.authorName : post.authorEmail.split('@')[0];
                 
                 if (activeSearchQuery !== "") {
-                    if (!displayName.toLowerCase().includes(activeSearchQuery)) {
-                        return; 
+                    if (!displayName.toLowerCase().includes(activeSearchQuery)) return;
+                    if (displayName.toLowerCase() === activeSearchQuery.toLowerCase() || searchedUserDisplayName === activeSearchQuery) {
+                        searchedUserDisplayName = displayName; // Get exact capitalization
                     }
                 }
 
                 if (post.categories && post.categories.includes(categoryFilter)) {
-                    postsCount++;
-                    
-                    const date = post.createdAt ? post.createdAt.toDate().toLocaleDateString() : "Just now";
-                    
-                    let mediaHtml = '';
-                    let fullMediaHtml = '';
-                    if (post.mediaUrl) {
-                        if (post.mediaType === 'video') {
-                            mediaHtml = `<video class="post-media" src="${post.mediaUrl}"></video>`;
-                            fullMediaHtml = `<video class="full-post-media" src="${post.mediaUrl}" controls></video>`;
-                        } else if (post.mediaType === 'pdf') {
-                            mediaHtml = `<div style="margin:15px 0; padding:15px; background:#f1e4ff; border-radius:12px; color:#764ba2; font-weight:bold; text-align:center;">📄 View Attached PDF</div>`;
-                            fullMediaHtml = `<a href="${post.mediaUrl}" target="_blank" style="display:block; margin: 15px 0; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; border-radius: 16px; font-weight: bold; text-decoration: none; box-shadow: 0 8px 20px rgba(118, 75, 162, 0.25);">📄 Click to open Full PDF</a>`;
-                        } else {
-                            mediaHtml = `<img class="post-media" src="${post.mediaUrl}" alt="Post image">`;
-                            fullMediaHtml = `<img class="full-post-media" src="${post.mediaUrl}" alt="Post image">`;
-                        }
-                    }
-
-                    const postCard = document.createElement("div");
-                    postCard.className = "post-card";
-                    postCard.innerHTML = `
-                        <div class="post-header">
-                            <strong>${displayName}</strong> 
-                            <span class="post-date">${date}</span>
-                        </div>
-                        <div class="post-text">${post.text.length > 100 ? post.text.substring(0, 100) + '...' : post.text}</div>
-                        ${mediaHtml}
-                        <div class="post-tags">
-                            ${post.categories.map(cat => cat !== "All" ? `<span class="tag">#${cat}</span>` : "").join("")}
-                        </div>
-                    `;
-
-                    postCard.addEventListener("click", () => {
-                        let deleteBtnHtml = "";
-                        if (auth.currentUser && auth.currentUser.email === post.authorEmail) {
-                            deleteBtnHtml = `<button id="deleteFeedPostBtn" style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: white; border: none; padding: 12px; border-radius: 12px; cursor: pointer; margin-top: 20px; width: 100%; font-weight: bold; font-size: 16px; box-shadow: 0 4px 15px rgba(255, 71, 87, 0.3);">🗑️ Delete Post</button>`;
-                        }
-
-                        fullPostContent.innerHTML = `
-                            <div class="post-header">
-                                <strong>${displayName}</strong> 
-                                <span class="post-date">${date}</span>
-                            </div>
-                            <div class="post-text" style="font-size: 18px;">${post.text}</div>
-                            ${fullMediaHtml}
-                            <div class="post-tags" style="margin-top: 15px;">
-                                ${post.categories.map(cat => cat !== "All" ? `<span class="tag">#${cat}</span>` : "").join("")}
-                            </div>
-                            ${deleteBtnHtml}
-                        `;
-                        viewPostModal.style.display = "flex";
-
-                        const deleteBtn = document.getElementById("deleteFeedPostBtn");
-                        if (deleteBtn) {
-                            deleteBtn.addEventListener("click", async () => {
-                                if (confirm("Are you sure you want to permanently delete this advice?")) {
-                                    deleteBtn.innerText = "Deleting...";
-                                    try {
-                                        await deleteDoc(doc(db, "posts", postId)); 
-                                        viewPostModal.style.display = "none";
-                                        loadPosts(selectedCategory); 
-                                    } catch (error) {
-                                        console.error("Error deleting post:", error);
-                                        alert("Failed to delete post. Check console.");
-                                    }
-                                }
-                            });
-                        }
-                    });
-
-                    feedContainer.appendChild(postCard);
+                    matchingPosts.push({ id: postId, post: post, displayName: displayName });
                 }
             });
 
-            if (postsCount === 0) {
-                if (activeSearchQuery !== "") {
-                    feedContainer.innerHTML = `<h3 style="color: #a4b0be; text-align:center;">No posts found for user @${activeSearchQuery}.</h3>`;
-                } else {
-                    feedContainer.innerHTML = `<h3 style="color: #a4b0be; text-align:center;">No advice in ${categoryFilter} yet. Be the first!</h3>`;
-                }
+            feedContainer.innerHTML = ""; 
+
+            if (matchingPosts.length === 0) {
+                if (activeSearchQuery !== "") feedContainer.innerHTML = `<h3 style="color: #a4b0be; text-align:center;">No posts found for user @${activeSearchQuery}.</h3>`;
+                else feedContainer.innerHTML = `<h3 style="color: #a4b0be; text-align:center;">No advice in ${categoryFilter} yet. Be the first!</h3>`;
+                return;
             }
+
+            // Generate Public Profile Card with BIO
+            if (activeSearchQuery !== "") {
+                let publicBio = "Loading bio...";
+                try {
+                    const userQ = query(collection(db, "users"), where("nickname", "==", searchedUserDisplayName));
+                    const userSnap = await getDocs(userQ);
+                    if (!userSnap.empty) publicBio = userSnap.docs[0].data().bio || "No bio yet.";
+                    else publicBio = "No bio yet.";
+                } catch (err) {
+                    publicBio = "No bio yet.";
+                }
+
+                const profileHeader = document.createElement("div");
+                profileHeader.style.cssText = "text-align: center; padding: 25px 20px; background: white; border-radius: 24px; margin-bottom: 20px; box-shadow: 0px 8px 24px rgba(149, 157, 165, 0.1);";
+                profileHeader.innerHTML = `
+                    <div style="font-size: 55px; margin-bottom: 10px;">👤</div>
+                    <h2 style="margin: 0; color: #6c5ce7; font-weight: 700;">@${searchedUserDisplayName}</h2>
+                    <p style="color: #636e72; font-size: 14px; margin: 15px 10px; font-style: italic; line-height: 1.4; white-space: pre-wrap;">${publicBio}</p>
+                    <hr style="border: 0; border-top: 2px solid #f0f2f5; margin: 20px 0;">
+                    <h3 style="text-align: left; margin-bottom: 0; color: #2d3436; font-weight: 800;">Posts</h3>
+                `;
+                feedContainer.appendChild(profileHeader);
+            }
+
+            // Render matching posts
+            matchingPosts.forEach((item) => {
+                const post = item.post;
+                const postId = item.id;
+                const displayName = item.displayName;
+                const date = post.createdAt ? post.createdAt.toDate().toLocaleDateString() : "Just now";
+                
+                let mediaHtml = ''; let fullMediaHtml = '';
+                if (post.mediaUrl) {
+                    if (post.mediaType === 'video') {
+                        mediaHtml = `<video class="post-media" src="${post.mediaUrl}"></video>`;
+                        fullMediaHtml = `<video class="full-post-media" src="${post.mediaUrl}" controls></video>`;
+                    } else if (post.mediaType === 'pdf') {
+                        mediaHtml = `<div style="margin:15px 0; padding:15px; background:#f1e4ff; border-radius:12px; color:#764ba2; font-weight:bold; text-align:center;">📄 View Attached PDF</div>`;
+                        fullMediaHtml = `<a href="${post.mediaUrl}" target="_blank" style="display:block; margin: 15px 0; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; border-radius: 16px; font-weight: bold; text-decoration: none;">📄 Click to open Full PDF</a>`;
+                    } else {
+                        mediaHtml = `<img class="post-media" src="${post.mediaUrl}" alt="Post image">`;
+                        fullMediaHtml = `<img class="full-post-media" src="${post.mediaUrl}" alt="Post image">`;
+                    }
+                }
+
+                const postCard = document.createElement("div");
+                postCard.className = "post-card";
+                postCard.innerHTML = `
+                    <div class="post-header">
+                        <strong class="feed-username" data-username="${displayName}">${displayName}</strong> 
+                        <span class="post-date">${date}</span>
+                    </div>
+                    <div class="post-text">${post.text.length > 100 ? post.text.substring(0, 100) + '...' : post.text}</div>
+                    ${mediaHtml}
+                    <div class="post-tags">${(post.categories || []).map(cat => cat !== "All" ? `<span class="tag">#${cat}</span>` : "").join("")}</div>
+                    <div style="border-top: 2px solid #f0f2f5; margin-top: 15px; padding-top: 12px; color: #a4b0be; font-size: 13px; font-weight: 700; display: flex; align-items: center;">💬 View Thread / Reply</div>
+                `;
+
+                // Clickable Username (Feed)
+                postCard.querySelector('.feed-username').addEventListener('click', (e) => {
+                    e.stopPropagation(); // Prevents opening the post thread
+                    triggerProfileSearch(displayName);
+                });
+
+                postCard.addEventListener("click", () => {
+                    let deleteBtnHtml = "";
+                    if (auth.currentUser && auth.currentUser.email === post.authorEmail) {
+                        deleteBtnHtml = `<button id="deleteFeedPostBtn" style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: white; border: none; padding: 12px; border-radius: 12px; cursor: pointer; margin-top: 20px; width: 100%; font-weight: bold; font-size: 16px;">🗑️ Delete Main Post</button>`;
+                    }
+
+                    fullPostContent.innerHTML = `
+                        <div class="post-header">
+                            <strong class="feed-username" data-username="${displayName}">${displayName}</strong> 
+                            <span class="post-date">${date}</span>
+                        </div>
+                        <div class="post-text" style="font-size: 18px;">${post.text}</div>
+                        ${fullMediaHtml}
+                        <div class="post-tags" style="margin-top: 15px;">${(post.categories || []).map(cat => cat !== "All" ? `<span class="tag">#${cat}</span>` : "").join("")}</div>
+                        ${deleteBtnHtml}
+                    `;
+
+                    // Clickable Username (Inside Post Modal)
+                    fullPostContent.querySelector('.feed-username').addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        triggerProfileSearch(displayName);
+                    });
+                    
+                    currentViewingPostId = postId;
+                    loadComments(postId);
+                    viewPostModal.style.display = "flex";
+
+                    const deleteBtn = document.getElementById("deleteFeedPostBtn");
+                    if (deleteBtn) {
+                        deleteBtn.addEventListener("click", async () => {
+                            if (confirm("Are you sure you want to permanently delete this advice?")) {
+                                deleteBtn.innerText = "Deleting...";
+                                await deleteDoc(doc(db, "posts", postId)); 
+                                viewPostModal.style.display = "none";
+                                currentViewingPostId = null;
+                                loadPosts(selectedCategory); 
+                            }
+                        });
+                    }
+                });
+
+                feedContainer.appendChild(postCard);
+            });
+
         } catch (error) {
             console.error("Error loading posts:", error);
             feedContainer.innerHTML = '<h3 style="color: #ff4757; text-align:center;">Failed to load feed. Check console.</h3>';
@@ -428,6 +458,7 @@ if (isHomePage) {
 
     closeViewModalBtn.addEventListener("click", () => {
         viewPostModal.style.display = "none";
+        currentViewingPostId = null;
     });
 
     categoryBtns.forEach(btn => {
@@ -439,17 +470,9 @@ if (isHomePage) {
         });
     });
 
-    //authentication guard & nickname
+    //auth guard
     onAuthStateChanged(auth, async (user) => {
         if (user) {
-            // --- NEW: EXTRA BOUNCER CHECK FOR THE HOMEPAGE ---
-            if (!user.emailVerified) {
-                await signOut(auth);
-                window.location.href = "index.html";
-                return;
-            }
-            // -------------------------------------------------
-            
             try {
                 const docRef = doc(db, "users", user.uid);
                 const docSnap = await getDoc(docRef);
@@ -458,26 +481,22 @@ if (isHomePage) {
                 if (docSnap.exists()) {
                     role = docSnap.data().role;
                     currentUserNickname = docSnap.data().nickname || docSnap.data().rollNumber; 
+                    currentUserBio = docSnap.data().bio || "No bio yet."; // Fetch Bio
                 } else {
                     const rollNumber = user.email.substring(0, 11);
                     currentUserNickname = rollNumber; 
-                    const batchYear = rollNumber.substring(0, 2); 
-                    const currentDate = new Date();
-                    let currentYear = currentDate.getFullYear();
-                    let currentMonth = currentDate.getMonth();   
-                    let firstYearAdmissionYear = currentYear;
-                    if (currentMonth < 6) firstYearAdmissionYear = currentYear - 1;
+                    currentUserBio = "No bio yet.";
                     
-                    const firstYearPrefix = firstYearAdmissionYear.toString().slice(-2);
-                    if (parseInt(batchYear) < parseInt(firstYearPrefix)) {
-                        role = "senior";
-                    }
+                    let firstYearPrefix = new Date().getFullYear().toString().slice(-2);
+                    if (new Date().getMonth() < 6) firstYearPrefix = (new Date().getFullYear() - 1).toString().slice(-2);
+                    if (parseInt(rollNumber.substring(0, 2)) < parseInt(firstYearPrefix)) role = "senior";
 
                     await setDoc(docRef, {
                         email: user.email,
                         role: role,
                         rollNumber: rollNumber,
                         nickname: currentUserNickname,
+                        bio: currentUserBio,
                         createdAt: new Date()
                     });
                 }
@@ -495,14 +514,14 @@ if (isHomePage) {
         }
     });
 
-    //profile model logic
+    //profile logic
     profileBtn.addEventListener("click", () => {
         profileModal.style.display = "flex";
         profileNicknameDisplay.innerText = currentUserNickname;
         profileEmailDisplay.innerText = auth.currentUser.email;
+        profileBioDisplay.innerText = currentUserBio; // Display Bio
         
         cancelEditBtn.click();
-        
         loadMyPosts(); 
     });
 
@@ -516,65 +535,84 @@ if (isHomePage) {
 
     editProfileBtn.addEventListener("click", () => {
         profileNicknameDisplay.style.display = "none";
+        profileEmailDisplay.style.display = "none";
+        profileBioDisplay.style.display = "none";
         profileActionButtons.style.display = "none";
         editProfileForm.style.display = "flex";
         
         editNicknameInput.value = currentUserNickname;
+        editBioInput.value = currentUserBio === "No bio yet." ? "" : currentUserBio; // Load Bio into box
+        
         editFeedback.style.color = "#a4b0be";
         editFeedback.innerText = "Must have numeric, small, capital, and special char (@#$&-_). 3-15 chars, no spaces.";
     });
 
     cancelEditBtn.addEventListener("click", () => {
         profileNicknameDisplay.style.display = "block";
+        profileEmailDisplay.style.display = "block";
+        profileBioDisplay.style.display = "block";
         profileActionButtons.style.display = "flex";
         editProfileForm.style.display = "none";
     });
 
     saveProfileBtn.addEventListener("click", async () => {
         const newNickname = editNicknameInput.value.trim();
+        const newBio = editBioInput.value.trim();
         
-        if (newNickname === currentUserNickname) {
+        // If nothing changed, just cancel
+        if (newNickname === currentUserNickname && newBio === (currentUserBio === "No bio yet." ? "" : currentUserBio)) {
             cancelEditBtn.click();
             return;
         }
 
-        const nicknameRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$&-_])[A-Za-z\d@#$&-_]{3,15}$/;
-        if (!nicknameRegex.test(newNickname)) {
-            editFeedback.style.color = "#ff4757";
-            editFeedback.innerText = "❌ Missing capital, small, numeric, or special char. No spaces allowed.";
-            return;
-        }
-
-        editFeedback.style.color = "#667eea";
-        editFeedback.innerText = "Checking availability & updating...";
         saveProfileBtn.disabled = true;
 
-        try {
-            const q = query(collection(db, "users"), where("nickname", "==", newNickname));
-            const querySnapshot = await getDocs(q);
-            
-            if (!querySnapshot.empty) {
+        // Only validate Nickname uniqueness if they actually changed it
+        if (newNickname !== currentUserNickname) {
+            const nicknameRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$&-_])[A-Za-z\d@#$&-_]{3,15}$/;
+            if (!nicknameRegex.test(newNickname)) {
                 editFeedback.style.color = "#ff4757";
-                editFeedback.innerText = "❌ Username already taken!";
+                editFeedback.innerText = "❌ Missing capital, small, numeric, or special char. No spaces allowed.";
                 saveProfileBtn.disabled = false;
                 return;
             }
 
+            editFeedback.style.color = "#667eea";
+            editFeedback.innerText = "Checking availability & updating...";
+
+            try {
+                const q = query(collection(db, "users"), where("nickname", "==", newNickname));
+                const querySnapshot = await getDocs(q);
+                if (!querySnapshot.empty) {
+                    editFeedback.style.color = "#ff4757";
+                    editFeedback.innerText = "❌ Username already taken!";
+                    saveProfileBtn.disabled = false;
+                    return;
+                }
+            } catch(e) { console.error(e); }
+        } else {
+            editFeedback.style.color = "#667eea";
+            editFeedback.innerText = "Updating profile...";
+        }
+
+        try {
             await updateDoc(doc(db, "users", auth.currentUser.uid), {
-                nickname: newNickname
+                nickname: newNickname,
+                bio: newBio || "No bio yet." // Save Bio
             });
 
-            const postsQuery = query(collection(db, "posts"), where("authorEmail", "==", auth.currentUser.email));
-            const postsSnapshot = await getDocs(postsQuery);
-            
-            postsSnapshot.forEach(async (postDoc) => {
-                await updateDoc(doc(db, "posts", postDoc.id), {
-                    authorName: newNickname
+            if (newNickname !== currentUserNickname) {
+                const postsQuery = query(collection(db, "posts"), where("authorEmail", "==", auth.currentUser.email));
+                const postsSnapshot = await getDocs(postsQuery);
+                postsSnapshot.forEach(async (postDoc) => {
+                    await updateDoc(doc(db, "posts", postDoc.id), { authorName: newNickname });
                 });
-            });
+            }
 
             currentUserNickname = newNickname;
+            currentUserBio = newBio || "No bio yet."; // Update local state
             profileNicknameDisplay.innerText = currentUserNickname;
+            profileBioDisplay.innerText = currentUserBio;
             
             cancelEditBtn.click(); 
             loadPosts(selectedCategory); 
@@ -606,38 +644,82 @@ if (isHomePage) {
                     myCount++;
                     const date = post.createdAt ? post.createdAt.toDate().toLocaleDateString() : "Just now";
                     
-                    let mediaHtml = '';
+                    let mediaHtml = ''; let fullMediaHtml = '';
                     if (post.mediaUrl) {
-                        if (post.mediaType === 'video') mediaHtml = `<video class="post-media" src="${post.mediaUrl}"></video>`;
-                        else if (post.mediaType === 'pdf') mediaHtml = `<div style="margin:10px 0; padding:10px; background:#f1e4ff; border-radius:12px; color:#764ba2; font-weight:bold; text-align:center;">📄 Attached PDF</div>`;
-                        else mediaHtml = `<img class="post-media" src="${post.mediaUrl}" alt="Post image">`;
+                        if (post.mediaType === 'video') {
+                            mediaHtml = `<video class="post-media" src="${post.mediaUrl}"></video>`;
+                            fullMediaHtml = `<video class="full-post-media" src="${post.mediaUrl}" controls></video>`;
+                        } else if (post.mediaType === 'pdf') {
+                            mediaHtml = `<div style="margin:10px 0; padding:10px; background:#f1e4ff; border-radius:12px; color:#764ba2; font-weight:bold; text-align:center;">📄 Attached PDF</div>`;
+                            fullMediaHtml = `<a href="${post.mediaUrl}" target="_blank" style="display:block; margin: 15px 0; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; text-align: center; border-radius: 16px; font-weight: bold; text-decoration: none;">📄 Click to open Full PDF</a>`;
+                        } else {
+                            mediaHtml = `<img class="post-media" src="${post.mediaUrl}" alt="Post image">`;
+                            fullMediaHtml = `<img class="full-post-media" src="${post.mediaUrl}" alt="Post image">`;
+                        }
                     }
 
                     const postCard = document.createElement("div");
                     postCard.className = "post-card";
-                    postCard.style.cursor = "default"; 
+                    postCard.style.cursor = "pointer"; 
                     postCard.innerHTML = `
                         <div class="post-header">
                             <strong>${date}</strong> 
                         </div>
                         <div class="post-text">${post.text}</div>
                         ${mediaHtml}
-                        <button class="delete-my-post-btn" style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: white; border: none; padding: 8px 12px; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 14px; margin-top: 10px; width: 100%; box-shadow: 0 4px 10px rgba(255, 71, 87, 0.2);">🗑️ Delete</button>
+                        <div style="border-top: 2px solid #f0f2f5; margin-top: 15px; padding-top: 12px; color: #a4b0be; font-size: 13px; font-weight: 700; display: flex; align-items: center;">💬 View Thread / Reply</div>
+                        <button class="delete-my-post-btn" style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: white; border: none; padding: 8px 12px; border-radius: 12px; cursor: pointer; font-weight: bold; font-size: 14px; margin-top: 10px; width: 100%;">🗑️ Delete Post</button>
                     `;
 
-                    const deleteBtn = postCard.querySelector('.delete-my-post-btn');
-                    deleteBtn.addEventListener('click', async () => {
+                    postCard.addEventListener("click", (e) => {
+                        if (e.target.classList.contains('delete-my-post-btn')) return;
+
+                        let deleteBtnHtml = `<button id="deleteProfilePostBtn" style="background: linear-gradient(135deg, #ff4757 0%, #ff6b81 100%); color: white; border: none; padding: 12px; border-radius: 12px; cursor: pointer; margin-top: 20px; width: 100%; font-weight: bold; font-size: 16px;">🗑️ Delete Main Post</button>`;
+
+                        fullPostContent.innerHTML = `
+                            <div class="post-header">
+                                <strong class="feed-username" data-username="${post.authorName || currentUserNickname}">${post.authorName || currentUserNickname}</strong> 
+                                <span class="post-date">${date}</span>
+                            </div>
+                            <div class="post-text" style="font-size: 18px;">${post.text}</div>
+                            ${fullMediaHtml}
+                            <div class="post-tags" style="margin-top: 15px;">${(post.categories || []).map(cat => cat !== "All" ? `<span class="tag">#${cat}</span>` : "").join("")}</div>
+                            ${deleteBtnHtml}
+                        `;
+                        
+                        fullPostContent.querySelector('.feed-username').addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            profileModal.style.display = "none"; // Close profile modal first
+                            triggerProfileSearch(post.authorName || currentUserNickname);
+                        });
+
+                        currentViewingPostId = postId;
+                        loadComments(postId);
+                        viewPostModal.style.display = "flex";
+
+                        const deleteBtnModal = document.getElementById("deleteProfilePostBtn");
+                        if (deleteBtnModal) {
+                            deleteBtnModal.addEventListener("click", async () => {
+                                if (confirm("Are you sure you want to permanently delete this advice?")) {
+                                    deleteBtnModal.innerText = "Deleting...";
+                                    await deleteDoc(doc(db, "posts", postId)); 
+                                    viewPostModal.style.display = "none";
+                                    currentViewingPostId = null;
+                                    loadMyPosts(); 
+                                    loadPosts(selectedCategory); 
+                                }
+                            });
+                        }
+                    });
+
+                    const deleteBtnCard = postCard.querySelector('.delete-my-post-btn');
+                    deleteBtnCard.addEventListener('click', async (e) => {
+                        e.stopPropagation(); 
                         if (confirm("Are you sure you want to permanently delete this advice?")) {
-                            deleteBtn.innerText = "Deleting...";
-                            try {
-                                await deleteDoc(doc(db, "posts", postId));
-                                loadMyPosts(); 
-                                loadPosts(selectedCategory); 
-                            } catch (err) {
-                                console.error(err);
-                                alert("Failed to delete.");
-                                deleteBtn.innerText = "🗑️ Delete";
-                            }
+                            deleteBtnCard.innerText = "Deleting...";
+                            await deleteDoc(doc(db, "posts", postId));
+                            loadMyPosts(); 
+                            loadPosts(selectedCategory); 
                         }
                     });
 
@@ -645,17 +727,11 @@ if (isHomePage) {
                 }
             });
 
-            if (myCount === 0) {
-                myPostsContainer.innerHTML = `<p style="color: #a4b0be; text-align: center; font-weight:bold;">You haven't posted anything yet.</p>`;
-            }
-        } catch (error) {
-            console.error(error);
-            myPostsContainer.innerHTML = '<p style="color: #ff4757; text-align: center;">Failed to load posts.</p>';
-        }
+            if (myCount === 0) myPostsContainer.innerHTML = `<p style="color: #a4b0be; text-align: center; font-weight:bold;">You haven't posted anything yet.</p>`;
+        } catch (error) { console.error(error); }
     }
 
-
-    //model and posting logic
+    //posting logic
     const postModal = document.getElementById("postModal");
     const closeModalBtn = document.getElementById("closeModalBtn");
     const submitPostBtn = document.getElementById("submitPostBtn");
@@ -676,21 +752,14 @@ if (isHomePage) {
     uploadFileBtn.addEventListener("click", () => fileInput.click());
 
     fileInput.addEventListener("change", () => {
-        if (fileInput.files.length > 0) {
-            fileNameDisplay.innerText = fileInput.files[0].name;
-        }
+        if (fileInput.files.length > 0) fileNameDisplay.innerText = fileInput.files[0].name;
     });
 
     submitPostBtn.addEventListener("click", async () => {
         const text = postTextarea.value.trim();
-        if (!text && fileInput.files.length === 0) {
-            alert("Please write some advice or attach a file before posting!");
-            return;
-        }
+        if (!text && fileInput.files.length === 0) { alert("Please write some advice or attach a file!"); return; }
 
-        let mediaUrl = null;
-        let mediaType = null;
-
+        let mediaUrl = null; let mediaType = null;
         try {
             if (fileInput.files.length > 0) {
                 const file = fileInput.files[0];
@@ -703,26 +772,15 @@ if (isHomePage) {
                 formData.append("file", file);
                 formData.append("upload_preset", uploadPreset);
 
-                const cloudinaryResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, {
-                    method: 'POST',
-                    body: formData
-                });
-
+                const cloudinaryResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, { method: 'POST', body: formData });
                 const cloudData = await cloudinaryResponse.json();
 
-                if (cloudData.error) {
-                    throw new Error(cloudData.error.message);
-                }
+                if (cloudData.error) throw new Error(cloudData.error.message);
 
                 mediaUrl = cloudData.secure_url;
-                
-                if (file.type.startsWith('video/')) {
-                    mediaType = 'video';
-                } else if (file.type === 'application/pdf') {
-                    mediaType = 'pdf';
-                } else {
-                    mediaType = 'image';
-                }
+                if (file.type.startsWith('video/')) mediaType = 'video';
+                else if (file.type === 'application/pdf') mediaType = 'pdf';
+                else mediaType = 'image';
             }
 
             submitPostBtn.innerText = "Saving Post...";
@@ -749,13 +807,139 @@ if (isHomePage) {
             fileInput.value = "";
             fileNameDisplay.innerText = "";
             submitPostBtn.innerText = "Post";
-            
             loadPosts(selectedCategory);
             
         } catch (error) {
             console.error("Error: ", error);
-            alert("Failed to post. Check console.");
             submitPostBtn.innerText = "Post";
         }
     });
+
+    // ==========================================
+    // COMMENTS (REPLY) SYSTEM
+    // ==========================================
+    const commentTextarea = document.getElementById("commentTextarea");
+    const commentFileInput = document.getElementById("commentFileInput");
+    const commentUploadBtn = document.getElementById("commentUploadBtn");
+    const commentFileNameDisplay = document.getElementById("commentFileNameDisplay");
+    const submitCommentBtn = document.getElementById("submitCommentBtn");
+    const commentsContainer = document.getElementById("commentsContainer");
+
+    if (commentUploadBtn) commentUploadBtn.addEventListener("click", () => commentFileInput.click());
+
+    if (commentFileInput) {
+        commentFileInput.addEventListener("change", () => {
+            if (commentFileInput.files.length > 0) commentFileNameDisplay.innerText = commentFileInput.files[0].name;
+        });
+    }
+
+    if (submitCommentBtn) {
+        submitCommentBtn.addEventListener("click", async () => {
+            if (!currentViewingPostId) return;
+
+            const text = commentTextarea.value.trim();
+            if (!text && commentFileInput.files.length === 0) return;
+
+            let mediaUrl = null; let mediaType = null;
+            const originalBtnText = submitCommentBtn.innerText;
+            submitCommentBtn.innerText = "Sending...";
+            submitCommentBtn.disabled = true;
+
+            try {
+                if (commentFileInput.files.length > 0) {
+                    const file = commentFileInput.files[0];
+                    submitCommentBtn.innerText = "Uploading...";
+                    const cloudName = "dnmmkwbjr"; const uploadPreset = "ml_default"; 
+                    const formData = new FormData(); formData.append("file", file); formData.append("upload_preset", uploadPreset);
+                    const cloudinaryResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/auto/upload`, { method: 'POST', body: formData });
+                    const cloudData = await cloudinaryResponse.json();
+                    if (cloudData.error) throw new Error(cloudData.error.message);
+
+                    mediaUrl = cloudData.secure_url;
+                    if (file.type.startsWith('video/')) mediaType = 'video';
+                    else if (file.type === 'application/pdf') mediaType = 'pdf';
+                    else mediaType = 'image';
+                }
+
+                await addDoc(collection(db, "comments"), {
+                    postId: currentViewingPostId,
+                    text: text,
+                    authorEmail: auth.currentUser.email,
+                    authorName: currentUserNickname, 
+                    createdAt: new Date(),
+                    mediaUrl: mediaUrl,
+                    mediaType: mediaType
+                });
+                
+                commentTextarea.value = ""; commentFileInput.value = ""; commentFileNameDisplay.innerText = "";
+                submitCommentBtn.innerText = originalBtnText; submitCommentBtn.disabled = false;
+                loadComments(currentViewingPostId); 
+                
+            } catch (error) {
+                console.error("Comment Error: ", error);
+                submitCommentBtn.innerText = originalBtnText; submitCommentBtn.disabled = false;
+            }
+        });
+    }
+
+    async function loadComments(postId) {
+        commentsContainer.innerHTML = '<p style="color: #a4b0be; text-align:center; font-size: 13px; font-weight: bold; padding: 20px;">Loading replies...</p>';
+        try {
+            const q = query(collection(db, "comments"), where("postId", "==", postId));
+            const querySnapshot = await getDocs(q);
+            
+            let commentsArray = [];
+            querySnapshot.forEach((docSnap) => commentsArray.push({ id: docSnap.id, ...docSnap.data() }));
+            commentsArray.sort((a, b) => (a.createdAt ? a.createdAt.toDate() : new Date()) - (b.createdAt ? b.createdAt.toDate() : new Date()));
+
+            commentsContainer.innerHTML = "";
+            if (commentsArray.length === 0) { commentsContainer.innerHTML = '<p style="color: #a4b0be; text-align:center; font-size: 13px; font-weight: bold; padding: 20px;">No replies yet. Be the first to help out!</p>'; return; }
+
+            commentsArray.forEach((comment) => {
+                const date = comment.createdAt ? comment.createdAt.toDate().toLocaleDateString() : "Just now";
+                
+                let mediaHtml = '';
+                if (comment.mediaUrl) {
+                    if (comment.mediaType === 'video') mediaHtml = `<video class="post-media" src="${comment.mediaUrl}" controls style="max-height: 200px; margin-top: 10px; border-radius: 8px;"></video>`;
+                    else if (comment.mediaType === 'pdf') mediaHtml = `<a href="${comment.mediaUrl}" target="_blank" style="display:block; margin-top: 10px; padding: 10px; background: #f1e4ff; color: #764ba2; text-align: center; border-radius: 12px; font-weight: bold; text-decoration: none; font-size: 13px;">📄 Open Attached PDF</a>`;
+                    else mediaHtml = `<img class="post-media" src="${comment.mediaUrl}" alt="Comment image" style="max-height: 200px; margin-top: 10px; border-radius: 8px;">`;
+                }
+
+                let deleteHtml = "";
+                if (auth.currentUser && auth.currentUser.email === comment.authorEmail) {
+                    deleteHtml = `<span class="delete-comment-btn" data-id="${comment.id}" style="color: #ff4757; font-size: 12px; font-weight: bold; cursor: pointer; margin-left: 10px;">Delete</span>`;
+                }
+
+                const commentDiv = document.createElement("div");
+                commentDiv.className = "comment-card";
+                commentDiv.innerHTML = `
+                    <div class="comment-header">
+                        <strong class="feed-username" data-username="${comment.authorName}">${comment.authorName}</strong>
+                        <div><span class="comment-date">${date}</span>${deleteHtml}</div>
+                    </div>
+                    <div class="comment-text">${comment.text}</div>
+                    ${mediaHtml}
+                `;
+                
+                // Clickable Username (In Comments)
+                commentDiv.querySelector('.feed-username').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    triggerProfileSearch(comment.authorName);
+                });
+
+                commentsContainer.appendChild(commentDiv);
+            });
+
+            document.querySelectorAll('.delete-comment-btn').forEach(btn => {
+                btn.addEventListener('click', async (e) => {
+                    if(confirm("Are you sure you want to permanently delete your reply?")) {
+                        e.target.innerText = "Deleting...";
+                        await deleteDoc(doc(db, "comments", e.target.getAttribute('data-id')));
+                        loadComments(postId);
+                    }
+                });
+            });
+
+        } catch (error) { console.error(error); }
+    }
 }

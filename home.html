@@ -58,13 +58,36 @@
         </div>
     </div>
 
-    <div id="viewPostModal" class="modal-overlay">
-        <div class="modal-content" style="max-height: 90vh; overflow-y: auto;">
+    <div id="viewPostModal" class="modal-overlay" style="z-index: 2010;">
+        <div class="modal-content" style="max-height: 90vh; overflow-y: auto; display: flex; flex-direction: column;">
             <div class="modal-header">
-                <h3 style="margin: 0; font-weight: 800; color: #2d3436;">Post Details</h3>
+                <h3 style="margin: 0; font-weight: 800; color: #2d3436;">Post Thread</h3>
                 <button id="closeViewModalBtn" class="cancel-btn">Close</button>
             </div>
-            <div id="fullPostContent"></div>
+            
+            <div id="fullPostContent" style="margin-bottom: 15px;"></div>
+
+            <h4 style="margin: 0 0 10px 0; color: #2d3436; font-weight: 700; border-top: 2px solid #f0f2f5; padding-top: 15px;">Replies</h4>
+            <div id="commentsContainer" style="flex-grow: 1; overflow-y: visible; margin-bottom: 10px;"></div>
+
+            <div class="comment-input-area">
+                <textarea id="commentTextarea" placeholder="Write a reply to help this senior..." style="width: 100%; min-height: 60px; border: 2px solid #dfe6e9; border-radius: 12px; padding: 12px; font-size: 14px; outline: none; resize: none; background: #f8fafc; font-family: inherit; box-sizing: border-box;"></textarea>
+                
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <div style="display: flex; align-items: center;">
+                        <input type="file" id="commentFileInput" accept="image/*,video/*,application/pdf" hidden>
+                        <button id="commentUploadBtn" class="upload-icon-btn" style="width: 38px; height: 38px;" title="Attach File/Photo">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                                <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                                <polyline points="21 15 16 10 5 21"></polyline>
+                            </svg>
+                        </button>
+                        <span id="commentFileNameDisplay" class="file-name-text" style="font-size: 12px;"></span>
+                    </div>
+                    <button id="submitCommentBtn" class="post-btn" style="padding: 10px 20px; font-size: 14px;">Reply</button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -77,11 +100,16 @@
             <div style="padding: 20px 0;">
                 <div style="font-size: 55px; margin-bottom: 10px;">👤</div>
                 <h2 id="profileNicknameDisplay" style="margin: 0; color: #6c5ce7; font-weight: 700;">Loading...</h2>
-                <p id="profileEmailDisplay" style="color: #a4b0be; font-size: 14px; margin-top: 5px; font-weight: 600;"></p>
+                <p id="profileEmailDisplay" style="color: #a4b0be; font-size: 14px; margin-top: 5px; font-weight: 600; margin-bottom: 5px;"></p>
+                
+                <p id="profileBioDisplay" style="color: #636e72; font-size: 14px; margin: 15px 10px; font-style: italic; line-height: 1.4; white-space: pre-wrap;"></p>
                 
                 <div id="editProfileForm" class="edit-profile-form">
                     <input type="text" id="editNicknameInput" placeholder="New Username">
-                    <span id="editFeedback" style="font-size: 12px; color: #a4b0be; max-width: 80%; line-height: 1.4;">Must have numeric, small, capital, and special char (@#$&-_). 3-15 chars, no spaces.</span>
+                    <span id="editFeedback" style="font-size: 12px; color: #a4b0be; max-width: 80%; line-height: 1.4; margin-bottom: 15px;">Must have numeric, small, capital, and special char (@#$&-_). 3-15 chars, no spaces.</span>
+                    
+                    <textarea id="editBioInput" placeholder="Write a short bio or share your social media links..." style="width: 85%; padding: 12px; border: 2px solid #dfe6e9; border-radius: 12px; margin-bottom: 10px; font-size: 14px; font-family: inherit; resize: none; min-height: 80px; background: #f8fafc; outline: none;"></textarea>
+
                     <div class="edit-controls">
                         <button id="saveProfileBtn" class="save-btn">Save</button>
                         <button id="cancelEditBtn" class="cancel-edit-btn">Cancel</button>
@@ -91,7 +119,7 @@
                     <button id="editProfileBtn" class="edit-profile-btn">Edit Profile</button>
                     <button id="actualLogoutBtn">Log Out</button>
                 </div>
-                </div>
+            </div>
             <hr style="border: 0; border-top: 2px solid #f0f2f5; margin: 20px 0;">
             <h3 style="text-align: left; margin-bottom: 15px; color: #2d3436; font-weight: 800;">My Posts</h3>
             <div id="myPostsContainer" style="text-align: left;"></div>

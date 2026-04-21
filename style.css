@@ -450,3 +450,68 @@ main {
 
 .cancel-edit-btn { background: #dfe6e9; color: #636e72; border: none; padding: 10px 25px; border-radius: 20px; cursor: pointer; font-weight: bold; transition: 0.3s;}
 .cancel-edit-btn:hover { background: #b2bec3; color: white;}
+
+/*Comment button styling*/
+.comment-card {
+    background: #f8fafc;
+    border-radius: 16px;
+    padding: 15px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+    border: 1px solid #f0f2f5;
+}
+
+.comment-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.comment-header strong {
+    color: #6c5ce7;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+.comment-date {
+    font-size: 11px;
+    color: #a4b0be;
+    font-weight: 600;
+}
+
+.comment-text {
+    font-size: 14px;
+    line-height: 1.5;
+    color: #2d3436;
+    margin-bottom: 10px;
+    white-space: pre-wrap;
+}
+
+.comment-input-area {
+    border-top: 2px solid #f0f2f5;
+    padding-top: 15px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    background: white;
+    position: sticky;
+    bottom: -25px; /* Keeps it attached to the bottom of the modal */
+    padding-bottom: 15px;
+}
+
+/*CLICKABLE USERNAMES*/
+.feed-username {
+    color: #6c5ce7; 
+    font-size: 17px;
+    font-weight: 700; 
+    cursor: pointer;
+    transition: 0.2s;
+}
+.feed-username:hover {
+    color: #764ba2;
+    text-decoration: underline;
+}
+.comment-header .feed-username {
+    font-size: 14px;
+}
